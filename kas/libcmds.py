@@ -42,6 +42,7 @@ class Macro:
         Contains commands and provides method to run them.
     """
     def __init__(self, use_common_setup=True, use_common_cleanup=True):
+        self.cleanup_commands = []
         if use_common_setup:
             repo_loop = Loop('repo_setup_loop')
             repo_loop.add(SetupReposStep())
@@ -50,12 +51,17 @@ class Macro:
                 SetupDir(),
             ]
 
-            if ('SSH_PRIVATE_KEY' in os.environ
-                    or 'SSH_PRIVATE_KEY_FILE' in os.environ):
-                self.setup_commands.append(SetupSSHAgent())
+            if 'KAS_NO_HOME_SETUP' not in os.environ:
+                if ('SSH_PRIVATE_KEY' in os.environ
+                        or 'SSH_PRIVATE_KEY_FILE' in os.environ):
+                    self.setup_commands.append(SetupSSHAgent())
+                    self.cleanup_commands.append(CleanupSSHAgent())
+
+                self.setup_commands.append(SetupHome())
+            else:
+                self.setup_commands.append(SetupUserHome())
 
             self.setup_commands += [
-                SetupHome(),
                 InitSetupRepos(),
                 repo_loop,
                 FinishSetupRepos(),
@@ -65,15 +71,6 @@ class Macro:
             ]
         else:
             self.setup_commands = []
-
-        if (use_common_cleanup
-                and ('SSH_PRIVATE_KEY' in os.environ
-                     or 'SSH_PRIVATE_KEY_FILE' in os.environ)):
-            self.cleanup_commands = [
-                CleanupSSHAgent(),
-            ]
-        else:
-            self.cleanup_commands = []
 
         self.commands = []
 
@@ -198,6 +195,16 @@ class SetupHome(Command):
                         self.tmpdirname + "/.aws/credentials")
 
         ctx.environ['HOME'] = self.tmpdirname
+
+class SetupUserHome(Command):
+    """
+        Sets up kas to keep the user home directory
+    """
+    def __str__(self):
+        return 'setup_user_home'
+
+    def execute(self, ctx):
+        ctx.environ['HOME'] = os.environ.get('HOME', '/')
 
 
 class SetupDir(Command):
